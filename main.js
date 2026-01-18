@@ -12,6 +12,7 @@
   "use strict";
 
   const APP_URL = "https://gemini.google.com/app";
+  const DRAFT_KEY = "TM_GEMINI_MULTIASK_DRAFT";
 
   // ----------------------------
   // UI: floating button + modal
@@ -235,6 +236,15 @@
       gap: "10px",
     });
 
+    function saveCurrentDraft() {
+      const draft = {
+        baseQuestion: baseQ.value || "",
+        items: collectItems(itemsContainer),
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    }
+
     function addItem(prefill = "") {
       const row = document.createElement("div");
       row.className = "tm-row";
@@ -258,15 +268,25 @@
 
       del.addEventListener("click", () => row.remove());
 
-      top.appendChild(label);
-      top.appendChild(del);
       row.appendChild(top);
       row.appendChild(ta);
+
+      // Auto-save listeners
+      ta.addEventListener("input", saveCurrentDraft);
+      del.addEventListener("click", () => {
+        // Wait for row removal
+        setTimeout(saveCurrentDraft, 0);
+      });
 
       itemsContainer.appendChild(row);
     }
 
-    addBtn.addEventListener("click", () => addItem(""));
+    addBtn.addEventListener("click", () => {
+      addItem("");
+      saveCurrentDraft();
+    });
+
+    baseQ.addEventListener("input", saveCurrentDraft);
 
     const footer = document.createElement("div");
     footer.className = "tm-footer";
@@ -296,9 +316,10 @@
     modal.appendChild(footer);
     overlay.appendChild(modal);
 
-    addItem("");
-
-    return { overlay, baseQ, itemsContainer, start };
+    // If no initial items (e.g. not loading from draft), add one empty
+    // We defer this check to the caller (init) or handle it there.
+    // Return exposed methods
+    return { overlay, baseQ, itemsContainer, start, addItem, saveCurrentDraft };
   }
 
   // ----------------------------
@@ -465,6 +486,10 @@
     });
   }
 
+  function loadDraft() {
+    return safeJsonParse(localStorage.getItem(DRAFT_KEY), null);
+  }
+
   // ----------------------------
   // Main: button wiring
   // ----------------------------
@@ -479,11 +504,28 @@
     document.body.appendChild(btn);
 
     btn.addEventListener("click", async () => {
-      const { overlay, baseQ, itemsContainer, start } = createModal();
+      const { overlay, baseQ, itemsContainer, start, addItem, saveCurrentDraft } =
+        createModal();
 
-      // Read current editor content as "previous question"
-      const editor = findPromptEditor();
-      baseQ.value = getEditorValue(editor);
+      const draft = loadDraft();
+      if (draft && (draft.baseQuestion || (draft.items && draft.items.length))) {
+        // Restore from draft
+        baseQ.value = draft.baseQuestion || "";
+        if (draft.items && draft.items.length > 0) {
+          draft.items.forEach((txt) => addItem(txt));
+        } else {
+          addItem("");
+        }
+      } else {
+        // Fresh start
+        const editor = findPromptEditor();
+        baseQ.value = getEditorValue(editor);
+        addItem("");
+        // Save initial state so even just opening it creates a draft?
+        // Maybe better to wait for input. But let's save immediately to be safe
+        // if user just types in prompt and closes.
+        saveCurrentDraft();
+      }
 
       document.body.appendChild(overlay);
 
@@ -504,6 +546,9 @@
 
         // Open tabs in the same user gesture
         openTabsWithJob(baseQuestion, items);
+
+        // Clear draft on success
+        localStorage.removeItem(DRAFT_KEY);
 
         overlay.remove();
       });
