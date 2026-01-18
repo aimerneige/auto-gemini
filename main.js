@@ -290,6 +290,38 @@
 
     const footer = document.createElement("div");
     footer.className = "tm-footer";
+    // Modified to be a column to hold the row for options + buttons
+    footer.style.flexDirection = "column";
+    footer.style.alignItems = "flex-end";
+
+    // --- New: Option Row ---
+    const optionsRow = document.createElement("div");
+    optionsRow.style.display = "flex";
+    optionsRow.style.alignItems = "center";
+    optionsRow.style.marginBottom = "10px";
+    optionsRow.style.gap = "6px";
+
+    const clearCheck = document.createElement("input");
+    clearCheck.type = "checkbox";
+    clearCheck.id = "tm-gemini-clear-check";
+    clearCheck.checked = true; // Default ON
+    clearCheck.style.cursor = "pointer";
+
+    const clearLabel = document.createElement("label");
+    clearLabel.htmlFor = "tm-gemini-clear-check";
+    clearLabel.textContent = "开启后，点击开始时自动清空已保存的字符串";
+    clearLabel.style.fontSize = "13px";
+    clearLabel.style.color = "var(--tm-fg)";
+    clearLabel.style.cursor = "pointer";
+    clearLabel.style.userSelect = "none";
+
+    optionsRow.appendChild(clearCheck);
+    optionsRow.appendChild(clearLabel);
+    // -----------------------
+
+    const btnRow = document.createElement("div");
+    btnRow.style.display = "flex";
+    btnRow.style.gap = "10px";
 
     const cancel = document.createElement("button");
     cancel.className = "tm-btn";
@@ -301,9 +333,11 @@
 
     cancel.addEventListener("click", () => overlay.remove());
 
+    btnRow.appendChild(cancel);
+    btnRow.appendChild(start);
 
-    footer.appendChild(cancel);
-    footer.appendChild(start);
+    footer.appendChild(optionsRow);
+    footer.appendChild(btnRow);
 
     modal.appendChild(title);
     modal.appendChild(hint);
@@ -317,7 +351,7 @@
     // If no initial items (e.g. not loading from draft), add one empty
     // We defer this check to the caller (init) or handle it there.
     // Return exposed methods
-    return { overlay, baseQ, itemsContainer, start, addItem, saveCurrentDraft };
+    return { overlay, baseQ, itemsContainer, start, addItem, saveCurrentDraft, clearCheck };
   }
 
   // ----------------------------
@@ -509,7 +543,7 @@
     document.body.appendChild(btn);
 
     btn.addEventListener("click", async () => {
-      const { overlay, baseQ, itemsContainer, start, addItem, saveCurrentDraft } =
+      const { overlay, baseQ, itemsContainer, start, addItem, saveCurrentDraft, clearCheck } =
         createModal();
 
       const draft = loadDraft();
@@ -547,8 +581,10 @@
         // Open tabs in the same user gesture
         openTabsWithJob(baseQuestion, items);
 
-        // Clear draft on success
-        localStorage.removeItem(DRAFT_KEY);
+        // Clear draft on success ONLY if checkbox is checked
+        if (clearCheck && clearCheck.checked) {
+          localStorage.removeItem(DRAFT_KEY);
+        }
 
         overlay.remove();
       });
