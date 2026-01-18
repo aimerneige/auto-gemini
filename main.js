@@ -469,9 +469,18 @@
       })
     );
 
+    // Determine target URL
+    // If we are in a Gem (e.g. /gem/xxxx), we want to use that as the base.
+    // If we are in standard /app, we use APP_URL.
+    let targetUrl = APP_URL;
+    const gemMatch = location.pathname.match(/^\/gem\/[^/]+/);
+    if (gemMatch) {
+      targetUrl = location.origin + gemMatch[0];
+    }
+
     // Open N tabs
     items.forEach((_, i) => {
-      const url = new URL(APP_URL);
+      const url = new URL(targetUrl);
       url.searchParams.set("tmjob", jobId);
       url.searchParams.set("idx", String(i));
       GM_openInTab(url.toString(), {
