@@ -12,7 +12,14 @@
   "use strict";
 
   const APP_URL = "https://gemini.google.com/app";
-  const DRAFT_KEY = "TM_GEMINI_MULTIASK_DRAFT";
+
+  function getDraftKey() {
+    const gemMatch = location.pathname.match(/^\/gem\/([^/]+)/);
+    if (gemMatch && gemMatch[1]) {
+      return `TM_GEMINI_MULTIASK_DRAFT_${gemMatch[1]}`;
+    }
+    return "TM_GEMINI_MULTIASK_DRAFT";
+  }
 
   // ----------------------------
   // UI: floating button + modal
@@ -242,7 +249,7 @@
         items: collectItems(itemsContainer),
         timestamp: Date.now(),
       };
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      localStorage.setItem(getDraftKey(), JSON.stringify(draft));
     }
 
     function addItem(prefill = "") {
@@ -526,7 +533,7 @@
   }
 
   function loadDraft() {
-    return safeJsonParse(localStorage.getItem(DRAFT_KEY), null);
+    return safeJsonParse(localStorage.getItem(getDraftKey()), null);
   }
 
   // ----------------------------
@@ -583,7 +590,7 @@
 
         // Clear draft on success ONLY if checkbox is checked
         if (clearCheck && clearCheck.checked) {
-          localStorage.removeItem(DRAFT_KEY);
+          localStorage.removeItem(getDraftKey());
         }
 
         overlay.remove();
@@ -593,4 +600,3 @@
 
   init();
 })();
-
