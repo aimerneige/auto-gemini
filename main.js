@@ -245,8 +245,9 @@
 
     const modelOptions = [
       { text: "默认 (不自动切换)", value: "" },
-      { text: "Gemini (Fast)", value: "Gemini" },
-      { text: "Gemini Advanced", value: "Gemini Advanced" }
+      { text: "Gemini Fast", value: "fast" },
+      { text: "Gemini Thinking", value: "thinking" },
+      { text: "Gemini Pro", value: "pro" }
     ];
 
     modelOptions.forEach(opt => {
@@ -512,51 +513,69 @@
     return null;
   }
 
-  async function switchModel(targetModelName) {
-    if (!targetModelName) return;
+  async function switchModel(targetModelValue) {
+    if (!targetModelValue) return;
 
-    // 1. Try to find the model switcher. 
-    // Usually it acts as a header or button.
-    // Strategy: Look for the text "Gemini" or "Gemini Advanced" in a button-like element.
-    const allButtons = Array.from(document.querySelectorAll('button, div[role="button"], span[role="button"]'));
+    console.log("MultiAsk: Attempting to switch model to", targetModelValue);
 
-    // The switcher often displays the CURRENT model name.
-    // We want to find a button that matches "Gemini" or "Gemini Advanced" (current state)
-    // AND opens a menu.
-    // Since we don't know the exact current state, we search for known model names.
-    const knownModels = ["Gemini", "Gemini Advanced", "Gemini Ultra", "Gemini Pro"];
-    const switcher = allButtons.find(b => {
-      const txt = (b.innerText || "").trim();
-      return knownModels.includes(txt) || txt === targetModelName;
-    });
+    // -------------------------------------------------------------
+    // Strategies (Based on Browser Inspection)
+    // -------------------------------------------------------------
 
-    if (!switcher) {
-      console.log("MultiAsk: Could not find model switcher button.");
+    // 1. Find the TRIGGER button.
+    // In newer layouts, it's often close to the input area or explicitly named.
+    let switcherTrigger = null;
+
+    // Strategy A: By specific class found in inspection
+    switcherTrigger = document.querySelector('button.input-area-switch');
+
+    // Strategy B: By text content (Fast/Thinking/Pro/Gemini) on ANY button
+    if (!switcherTrigger) {
+      // Collect all buttons
+      const allButtons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+      const keywords = ["Fast", "Thinking", "Pro", "Gemini"];
+
+      switcherTrigger = allButtons.find(b => {
+        const txt = (b.innerText || "").trim();
+        // Must match one of the keywords
+        if (!keywords.some(k => txt.includes(k))) return false;
+
+        // Must NOT be the submit button
+        if (b.getAttribute("aria-label")?.includes("Send") ||
+          b.getAttribute("aria-label")?.includes("发送")) return false;
+
+        // Should ideally have popup attributes or be in the input area
+        return true;
+      });
+    }
+
+    if (!switcherTrigger) {
+      console.warn("MultiAsk: Could not find model switcher trigger. Aborting.");
       return;
     }
 
-    // If current text IS target, maybe we are already there?
-    // But sometimes "Gemini" is the text but we want to ensure it is selected?
-    // Let's click it to be sure/open menu.
-    switcher.click();
+    console.log("MultiAsk: Found trigger. Clicking:", switcherTrigger);
+    switcherTrigger.click();
     await sleep(800);
 
-    // 2. Now look for the menu item with the target name
-    const menuItems = Array.from(document.querySelectorAll('div[role="menuitem"], button[role="menuitem"], li[role="menuitem"], span[role="menuitem"]'));
-    // Also include generic buttons that might be in the dropdown
-    const dropdownButtons = Array.from(document.querySelectorAll('div[data-value], div[role="option"]'));
+    // 2. Select the option from the menu
+    // The menu items use `data-test-id`.
+    const start = Date.now();
+    let targetOption = null;
 
-    const candidates = [...menuItems, ...dropdownButtons, ...document.querySelectorAll('span, div')];
+    while (Date.now() - start < 3000) {
+      targetOption = document.querySelector(`button[data-test-id="bard-mode-option-${targetModelValue}"]`);
+      if (targetOption) break;
+      await sleep(150);
+    }
 
-    // Find exact match first
-    let target = candidates.find(el => (el.innerText || "").trim() === targetModelName);
-
-    if (target) {
-      target.click();
-      await sleep(1000); // Wait for switch
+    if (targetOption) {
+      console.log("MultiAsk: Found target option, clicking:", targetOption);
+      targetOption.click();
+      await sleep(1000);
     } else {
-      console.log(`MultiAsk: Could not find option '${targetModelName}' in menu.`);
-      // Close menu if possible?
+      console.warn(`MultiAsk: Option ${targetModelValue} not found in menu.`);
+      // Close menu by clicking body
       document.body.click();
     }
   }
@@ -582,10 +601,10 @@
     // --- Model Switching ---
     if (job.model) {
       // Wait a bit more for UI to be fully interactive (model switcher might load later)
-      await sleep(2000);
+      await sleep(3000); // 3 seconds wait
       await switchModel(job.model);
       // Re-focus editor just in case
-      editor.focus();
+      if (editor) editor.focus();
     }
     // -----------------------
 
@@ -597,7 +616,7 @@
     setEditorValue(editor, finalPrompt);
 
     // Give UI a moment to enable send button
-    await sleep(400);
+    await sleep(500);
     await clickSendButton();
   }
 
